@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en-AU">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>An AI reviewer on a retry change that passes every test · Jovan Blanco</title>
+<meta name="description" content="A retry change that passes every test. The reviewer found the planted double-post, then a hanging-request bug I'd written without noticing.">
+<meta property="og:title" content="An AI reviewer on a retry change that passes every test · Jovan Blanco">
+<meta property="og:description" content="A retry change that passes every test. The reviewer found the planted double-post, then a hanging-request bug I'd written without noticing.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%278%27 fill=%27%235B45D6%27/%3E%3Cpath d=%27M10 22l6-12 6 12M12.5 17h7%27 fill=%27none%27 stroke=%27white%27 stroke-width=%273%27 stroke-linecap=%27round%27 stroke-linejoin=%27round%27/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="bar"><div class="wrap">
+  <a class="brand" href="./">Jovan Blanco <span>· AI engineering notes</span></a>
+  <nav><a href="https://jovanmb.github.io/my-sticky-dashboard-demo/">Live demo</a><a href="https://github.com/jovanmb">GitHub</a></nav>
+</div></header>
+<main class="wrap">
+<article class="prose"><p class="kicker">Case study</p><h1>An AI reviewer on a retry change that passes every test</h1>
+<p><strong>Setup.</strong> A second run of my <a rel="noopener" href="https://github.com/jovanmb/claude-code-pr-review"><code>pr-review</code></a> skill, this time aimed at a class of bug that ordinary tests can&#39;t see. The PR, &quot;LUM-1060: retry transient API failures&quot;, adds automatic retries with exponential backoff to the HTTP client behind <a rel="noopener" href="https://jovanmb.github.io/my-sticky-dashboard-demo/">my dashboard</a>. It&#39;s two files: the client, and five new unit tests. All 43 tests in the repo pass.</p>
+<p>I planted one bug: the client retries <strong>every</strong> method, including POSTs that carry no idempotency key. If the server saves a message but the response is lost (a timeout, or a 502 from a proxy), the client sends it again. The ticket&#39;s third acceptance criterion says plainly: &quot;a retried request must never apply a user action twice.&quot;</p>
+<p>The reviewer was a fresh Claude Code subagent given only the skill file, the trap catalogue, the branch and the ticket. Before it ran, I wrote down what I&#39;d planted, what I already knew, and what it should <em>not</em> flag, so the result couldn&#39;t be graded generously after the fact.</p>
+<h2>Result against the sealed list</h2>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>Sealed before the run</th>
+<th>What happened</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>Planted:</strong> retrying unkeyed POSTs sends the message twice</td>
+<td>✅ Found and reproduced against the real API: one send, two messages stored. Graded High; AC3 not met</td>
+</tr>
+<tr>
+<td><strong>Known to me:</strong> retrying a ticket move that already happened gets a 409, so the user sees a failure for a move that succeeded</td>
+<td>✅ Found and reproduced</td>
+</tr>
+<tr>
+<td><strong>Correct on purpose:</strong> comment retries reuse their idempotency key; 4xx responses aren&#39;t retried</td>
+<td>✅ Correctly not flagged. It checked both and said why they&#39;re safe</td>
+</tr>
+<tr>
+<td><em>Not on my list</em></td>
+<td>🆕 <strong>A real bug I wrote without noticing:</strong> the 8-second timeout is cleared as soon as the response <em>headers</em> arrive, so a server that stalls mid-body leaves the request hanging forever, with no error and no retry. Reproduced: still pending after 2 seconds on a 200 ms timeout</td>
+</tr>
+</tbody></table></div>
+<p>It also checked, and correctly did <em>not</em> raise, the cases that only look dangerous: replaying a <code>PUT</code> of a whole document is harmless, a replayed <code>DELETE</code> gets a 404 the code already ignores, and the &quot;scheduled message&quot; endpoint stores nothing in this codebase, so the duplicate can&#39;t be shown there.</p>
+<p>I reran each of its reproduction scripts myself before writing this up.</p>
+<h2>What it got wrong</h2>
+<p><strong>It didn&#39;t spawn refute subagents.</strong> The skill only required them for money, security and auth findings. The blocking finding here was data integrity, so the reviewer reproduced it instead and moved on. The reproduction was solid, but nobody independently tried to argue it down. That&#39;s a gap in the skill, not a lapse by the reviewer: it followed the rule as written and then flagged the rule as too narrow.</p>
+<h2>What changed in the skill (v1.1)</h2>
+<p>The reviewer listed five ambiguities. Each became an edit:</p>
+<ol>
+<li><strong>Refutation now covers data-integrity findings, and any finding that alone forces a ❌.</strong> A reproduction proves the defect exists; refuters test whether it&#39;s reachable, already guarded or mis-graded. The skill now says to do both.</li>
+<li><strong>Exploitability has a defined scale.</strong> High is hit in normal use. Medium needs an uncommon but realistic condition. Low needs special access or a condition the deployment doesn&#39;t have.</li>
+<li><strong>A partially met AC</strong> blocks when the missing part is something the AC states explicitly.</li>
+<li><strong>Findings are ranked</strong> by severity, then by the stated priority order.</li>
+<li><strong>&quot;Read-only&quot; is precise.</strong> Never change tracked files; build output in ignored paths and scratch scripts outside the repo are fine.</li>
+</ol>
+<p>The trap catalogue gained one entry, the stalled-body timeout, because I genuinely missed it. I didn&#39;t add a trap for retries on writes. That one was planted, and the catalogue&#39;s rule is that an entry earns its place by being missed for real.</p>
+<h2>Why this matters</h2>
+<p>A retry layer is the kind of change that gets approved on sight: it&#39;s small, the code is tidy, and the tests it ships all pass, because they only test the cases where retrying is safe. The procedure that caught it is mechanical, not clever. Turn each acceptance criterion into a checkable behaviour, build a truth table of method × failure point, and run the cases against the real server instead of reasoning about them.</p>
+<p class="back"><a href="./">← All notes</a></p></article>
+</main>
+<footer class="wrap foot">© 2026 Jovan Blanco. All rights reserved. Written from real work; the dashboard runs on sample data for a fictional company.</footer>
+</body>
+</html>
