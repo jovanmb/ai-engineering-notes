@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en-AU">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>How my AI workflow evolved · Jovan Blanco</title>
+<meta name="description" content="Sixteen rewrites of my agent workflow in six weeks, each traced to the failure that caused it, and the eight lessons that held up.">
+<meta property="og:title" content="How my AI workflow evolved · Jovan Blanco">
+<meta property="og:description" content="Sixteen rewrites of my agent workflow in six weeks, each traced to the failure that caused it, and the eight lessons that held up.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%278%27 fill=%27%235B45D6%27/%3E%3Cpath d=%27M10 22l6-12 6 12M12.5 17h7%27 fill=%27none%27 stroke=%27white%27 stroke-width=%273%27 stroke-linecap=%27round%27 stroke-linejoin=%27round%27/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="bar"><div class="wrap">
+  <a class="brand" href="./">Jovan Blanco <span>· AI engineering notes</span></a>
+  <nav><a href="https://jovanmb.github.io/my-sticky-dashboard-demo/">Live demo</a><a href="https://github.com/jovanmb">GitHub</a></nav>
+</div></header>
+<main class="wrap">
+<article class="prose"><p class="kicker">Process</p><h1>How my AI workflow evolved</h1>
+<p>The ticket workflow was rewritten 16 times in six weeks. Before each change I saved a snapshot (<code>SKILL.md.pre-&lt;reason&gt;</code>), so every rule below can be traced to the failure that caused it. Most changes came from a review comment, a QA finding, or a retro after a real run. Very few were &quot;good ideas&quot; added in advance.</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>When</th>
+<th>Change</th>
+<th>What went wrong first</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Week 1</td>
+<td><strong>Baseline:</strong> mode gate (Port / Trivial / Standard / High-stakes), parallel read-only scouts with a word limit, a root-cause refute gate, plan mode before edits, deliverables as a menu</td>
+<td>Long sessions burned context reading files in the main thread; findings were stated before they were checked</td>
+</tr>
+<tr>
+<td>Week 1</td>
+<td><strong>Sweep your own diff:</strong> old calls left in files you already edited are suspects. Re-check ported comments at the target branch</td>
+<td>Two misses on one change, both in files already in the diff (one found by review, one by QA). A clean port carried a comment that was false on the target branch</td>
+</tr>
+<tr>
+<td>Week 1</td>
+<td><strong>Ports escalate on drift</strong>, measured by a script; the sweep became a script; push confirmation must show sweep output; every PR states its forward-port decision</td>
+<td>A clean-applying port landed on a branch missing a prerequisite fix, and a backlog of fixes was never forward-ported</td>
+</tr>
+<tr>
+<td>Week 2</td>
+<td><strong>Adaptive investigation:</strong> claim labels at the source, &quot;name what you couldn&#39;t establish&quot;, follow-up waves with a stop rule, the ledger as the report, an exit test per acceptance criterion, <strong>&quot;a refuted hypothesis is dead&quot;</strong></td>
+<td>A plausible but wrong mechanism shipped untested. Later, a refuter killed a planned fix; one more scout question found the real cause and a second bug</td>
+</tr>
+<tr>
+<td>Week 4</td>
+<td><strong>Refresh generated indexes before scouts</strong> (cheap one automatically, slow one with approval, never from a worktree)</td>
+<td>Stale route and graph indexes were being read as current</td>
+</tr>
+<tr>
+<td>Week 4</td>
+<td><strong>Investigate mode</strong> for support questions with no ticket: intake, live-data paths, a reply gate</td>
+<td>Support questions needed the investigation core without the ticket machinery</td>
+</tr>
+<tr>
+<td>Week 4</td>
+<td>Wrote currency as &quot;AUD 12&quot; instead of a dollar sign before a digit</td>
+<td>The skill loader substitutes <code>$1</code>, <code>$2</code>… as arguments, silently corrupting the text</td>
+</tr>
+<tr>
+<td>Week 4</td>
+<td><strong>Ask the user once what they already know; notes are leads, not evidence; no overlapping scout questions; one message for all DB prerequisites; a control row in data queries; a purpose line before drafting</strong></td>
+<td>The first Investigate run: a stale memory note was treated as evidence, the user&#39;s knowledge arrived late, two scouts read the same code, and DB setup took many round-trips</td>
+</tr>
+<tr>
+<td>Week 4</td>
+<td><strong>Retro step</strong> with a bounded log, and a <strong>compaction trigger</strong> (400 lines, or a section 25% past baseline)</td>
+<td>The skill kept growing; improvements needed to stay under human control</td>
+</tr>
+<tr>
+<td>Week 4</td>
+<td>First compaction: case histories moved to <code>rationale.md</code>, replaced by one-line pointers</td>
+<td>Hit the size limit</td>
+</tr>
+<tr>
+<td>Week 5</td>
+<td>Approved DB statements run through a guard script</td>
+<td>DB discipline varied between runs; make it mechanical</td>
+</tr>
+<tr>
+<td>Week 5</td>
+<td>Log pulls mask <strong>names and phones</strong>, not just emails</td>
+<td>A masking rule that covered only emails let other personal fields through</td>
+</tr>
+<tr>
+<td>Week 6</td>
+<td>The DB checklist asks <strong>which variable</strong> holds the password</td>
+<td>The default variable held the wrong value, and a login attempt was burned</td>
+</tr>
+<tr>
+<td>Week 6</td>
+<td>Ticket pick-up writes became a standing permission, <strong>with a guard</strong>: stop if the ticket is someone else&#39;s or already moved on</td>
+<td>An earlier run moved a colleague&#39;s ticket, and it had to be reverted</td>
+</tr>
+<tr>
+<td>Week 6</td>
+<td>Intake asks which app or host to open before driving a browser</td>
+<td>The agent guessed the host</td>
+</tr>
+</tbody></table></div>
+<h2>The lessons that held up</h2>
+<ol>
+<li><strong>Wide reading in the main thread wastes context.</strong> If you&#39;re opening a third file to answer one question, send a scout.</li>
+<li><strong>Ask the human what they already know, first.</strong> Domain facts the code can&#39;t show are the cheapest evidence there is.</li>
+<li><strong>Notes go stale.</strong> Anything from memory or an earlier session is a lead to verify at the code that acts on it.</li>
+<li><strong>Overlapping questions double the reading</strong> and echo the same unverified claim back as if it were confirmed.</li>
+<li><strong>Collect every prerequisite in one message</strong>, including <em>which</em> credential variable to use, not just &quot;the password&quot;.</li>
+<li><strong>Masking must cover every personal field</strong>, not the one you thought of.</li>
+<li><strong>A failing tool must say so and exit non-zero.</strong> Silent failure is how a &quot;verified&quot; result turns out to be empty.</li>
+<li><strong>Don&#39;t guess the environment or the entry point.</strong> Ask, or detect it mechanically.</li>
+</ol>
+<h2>What I deliberately kept out</h2>
+<ul>
+<li><strong>Blocking compaction.</strong> A <code>PreCompact</code> hook that refused to compact until a handoff existed made requests fail outright when compaction was recovering from a context limit. It was replaced by an early nudge from a context-size hook.</li>
+<li><strong>A web page that drives a local agent.</strong> It&#39;s convenient, but where an organisation has disabled the official remote-control feature, a polling runner would quietly recreate it. Instead, the page opens Claude Code locally with a prompt, and the human starts the work.</li>
+</ul>
+<p class="back"><a href="./">← All notes</a></p></article>
+</main>
+<footer class="wrap foot">© 2026 Jovan Blanco. All rights reserved. Written from real work; the dashboard runs on sample data for a fictional company.</footer>
+</body>
+</html>

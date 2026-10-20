@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en-AU">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>An AI reviewer on a PR with a planted bug · Jovan Blanco</title>
+<meta name="description" content="I planted a SQL injection in a PR and gave it to an AI reviewer running my review procedure. It found the bug, then two real ones I hadn't planted.">
+<meta property="og:title" content="An AI reviewer on a PR with a planted bug · Jovan Blanco">
+<meta property="og:description" content="I planted a SQL injection in a PR and gave it to an AI reviewer running my review procedure. It found the bug, then two real ones I hadn't planted.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%278%27 fill=%27%235B45D6%27/%3E%3Cpath d=%27M10 22l6-12 6 12M12.5 17h7%27 fill=%27none%27 stroke=%27white%27 stroke-width=%273%27 stroke-linecap=%27round%27 stroke-linejoin=%27round%27/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="bar"><div class="wrap">
+  <a class="brand" href="./">Jovan Blanco <span>· AI engineering notes</span></a>
+  <nav><a href="https://jovanmb.github.io/my-sticky-dashboard-demo/">Live demo</a><a href="https://github.com/jovanmb">GitHub</a></nav>
+</div></header>
+<main class="wrap">
+<article class="prose"><p class="kicker">Case study</p><h1>An AI reviewer on a PR with a planted bug</h1>
+<p><strong>Setup.</strong> A realistic one-commit PR against the API behind <a rel="noopener" href="https://jovanmb.github.io/my-sticky-dashboard-demo/">my dashboard</a>: &quot;LUM-1050: add free-text search to <code>GET /api/tickets</code>&quot;. It touches five files across the API, the domain and both storage backends. I planted one bug on purpose and told the reviewer nothing about it: the search term is interpolated into SQL (<code>summary LIKE &#39;%${q}%&#39;</code>), and the parameter has no length cap.</p>
+<p>The reviewer was a fresh Claude Code subagent given only my <code>pr-review</code> skill file, the trap catalogue, the branch and the ticket&#39;s four acceptance criteria. It ran read-only. Nothing below is edited except for length.</p>
+<h2>What it found</h2>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>#</th>
+<th>Finding</th>
+<th>Planted?</th>
+<th>Verdict effect</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>1</td>
+<td><strong>SQL injection</strong> in the search filter. An ordinary search like <code>doesn&#39;t</code> returns a 500, <code>&#39; OR 1=1 --</code> bypasses the scope filters, and a <code>UNION</code> reads other tables. Stacked writes are blocked by the driver</td>
+<td><strong>Yes</strong></td>
+<td>❌ blocking (High; exploitability Low on a localhost dev server)</td>
+</tr>
+<tr>
+<td>2</td>
+<td><strong>The in-browser demo backend silently drops <code>q</code></strong>, so acceptance criterion 4 (&quot;same behaviour on both backends&quot;) fails</td>
+<td><strong>No, a real mistake of mine</strong></td>
+<td>❌ (unmet AC)</td>
+</tr>
+<tr>
+<td>3</td>
+<td><strong>The two backends disagree:</strong> SQLite <code>LIKE</code> treats <code>_</code> and <code>%</code> as wildcards and folds case for ASCII only; the in-memory filter doesn&#39;t</td>
+<td><strong>No</strong></td>
+<td>Medium</td>
+</tr>
+<tr>
+<td>4</td>
+<td>No tests for search, apostrophes, search + pagination, or backend parity</td>
+<td>Partly (I added none)</td>
+<td>Suggest-only</td>
+</tr>
+</tbody></table></div>
+<p>It <strong>proved</strong> findings 1 and 3 by running the exact SQL against Node&#39;s SQLite, rather than reasoning about them. It also noticed that the seed data&#39;s own summaries contain apostrophes, so the bug fires on normal use, not just on attack input.</p>
+<h2>The refute step, in practice</h2>
+<p>Because finding 1 is a security finding, the skill required refute subagents. It spawned two, in parallel:</p>
+<ul>
+<li><strong>A (look for an upstream guard):</strong> found none and reproduced the 500, the filter bypass and the <code>UNION</code> read. <strong>The finding survives.</strong></li>
+<li><strong>B (argue reachability):</strong> accepted the bug but argued for a downgrade to Medium: the server only listens on localhost, the API is already unauthenticated, and the data is fictional.</li>
+</ul>
+<p>The reviewer kept the severity at High and recorded B&#39;s points on the <em>exploitability</em> axis instead. The skill grades severity × exploitability and says refutation must never soften a finding that survived. Its reason: the decisive failure (a 500 on a normal search) needs no attacker at all.</p>
+<p><strong>What it dropped:</strong> a claim that stacked statements could write. It tested this, and the driver only compiles the first statement, so it didn&#39;t make the claim. It also left out a pre-existing ordering difference between backends, because that&#39;s not in this diff.</p>
+<h2>What it fed back into the skill</h2>
+<p>The reviewer listed five ambiguities in <code>pr-review/SKILL.md</code>. Each became an edit, following the skill&#39;s own retrospective rule (fix recipe gaps found in a real run):</p>
+<ol>
+<li><strong>Severity vs exploitability.</strong> Now explicit: reachability arguments lower <em>exploitability</em>, never the severity label.</li>
+<li><strong>A refuter that argues for a downgrade rather than a refutation.</strong> The finding survives; record the argument under exploitability.</li>
+<li><strong>An unmet AC with no current caller.</strong> It still counts as unmet. Grade by the AC, and note the missing caller in the impact.</li>
+<li><strong>Local branches with no hosting service.</strong> Section 0 now covers them: no threads, no ledger.</li>
+<li><strong>Which lens owns non-UI client code</strong> (a JS data adapter). Architecture and Ticket fit; Frontend is for what the user sees.</li>
+</ol>
+<h2>Why this matters</h2>
+<p>The planted bug is the kind a quick review approves: it&#39;s one line, it follows the shape of the line above it, and every existing test still passes. The two findings I <em>didn&#39;t</em> plant are the more useful result. The procedure (map each AC to behaviour first, check parity across implementations, run the input instead of reading it) found real mistakes in my own change that I&#39;d missed.</p>
+<p class="back"><a href="./">← All notes</a></p></article>
+</main>
+<footer class="wrap foot">© 2026 Jovan Blanco. All rights reserved. Written from real work; the dashboard runs on sample data for a fictional company.</footer>
+</body>
+</html>

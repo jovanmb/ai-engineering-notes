@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en-AU">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI engineering notes · Jovan Blanco</title>
+<meta name="description" content="How a senior full-stack engineer works with AI coding agents on a production codebase, and checks what they produce.">
+<meta property="og:title" content="AI engineering notes · Jovan Blanco">
+<meta property="og:description" content="How a senior full-stack engineer works with AI coding agents on a production codebase, and checks what they produce.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%278%27 fill=%27%235B45D6%27/%3E%3Cpath d=%27M10 22l6-12 6 12M12.5 17h7%27 fill=%27none%27 stroke=%27white%27 stroke-width=%273%27 stroke-linecap=%27round%27 stroke-linejoin=%27round%27/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="style.css">
+</head>
+<body class="home">
+<header class="bar"><div class="wrap">
+  <a class="brand" href="./">Jovan Blanco <span>· AI engineering notes</span></a>
+  <nav><a href="https://jovanmb.github.io/my-sticky-dashboard-demo/">Live demo</a><a href="https://github.com/jovanmb">GitHub</a></nav>
+</div></header>
+<main class="wrap">
+<section class="hero">
+  <p class="kicker">Senior full-stack engineer · .NET · TypeScript · SQL</p>
+  <h1>I use AI coding agents every day. These notes are about checking their work.</h1>
+  <p class="lede">I work on a live ticketing and payments platform with Claude Code as a daily tool. The agent writes a lot of the code; I review, test and decide. These are write-ups from that work: what the agent got wrong, how it was caught, and what changed afterwards.</p>
+</section>
+<section class="cards">
+<a class="card" href="decisions.html"><span class="kicker">Decision log</span><h3>Twelve times I corrected the AI</h3><p>Twelve real bugs and risks in AI-written code, how each was caught, and the rule that came out of it. Most of them looked correct.</p><span class="more">Read →</span></a>
+<a class="card" href="pr-review-case-study.html"><span class="kicker">Case study</span><h3>An AI reviewer on a PR with a planted bug</h3><p>I planted a SQL injection in a PR and gave it to an AI reviewer running my review procedure. It found the bug, then two real ones I hadn't planted.</p><span class="more">Read →</span></a>
+<a class="card" href="workflow-evolution.html"><span class="kicker">Process</span><h3>How my AI workflow evolved</h3><p>Sixteen rewrites of my agent workflow in six weeks, each traced to the failure that caused it, and the eight lessons that held up.</p><span class="more">Read →</span></a>
+</section>
+<section class="demo">
+  <div class="demo-copy">
+    <p class="kicker">Built this way</p>
+    <h2>My Sticky Dashboard</h2>
+    <p>The work dashboard I use every day: the ticket I'm on, my PRs, Slack, the sprint, my calendar and the daily stand-up, with AI drafts I approve before anything is sent. Rebuilt on sample data with a typed API, 38 unit and API tests, 8 Playwright tests and CI.</p>
+    <p><a class="btn" href="https://jovanmb.github.io/my-sticky-dashboard-demo/">Open the live demo →</a></p>
+    <p class="note">Source is private and available on request.</p>
+  </div>
+  <a class="shot" href="https://jovanmb.github.io/my-sticky-dashboard-demo/"><img src="dashboard.png" width="1440" height="900" alt="My Sticky Dashboard: overview with the current ticket, PRs raised and PRs to review"></a>
+</section>
+</main>
+<footer class="wrap foot">© 2026 Jovan Blanco. All rights reserved. Written from real work; the dashboard runs on sample data for a fictional company.</footer>
+</body>
+</html>

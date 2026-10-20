@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en-AU">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Twelve times I corrected the AI · Jovan Blanco</title>
+<meta name="description" content="Twelve real bugs and risks in AI-written code, how each was caught, and the rule that came out of it. Most of them looked correct.">
+<meta property="og:title" content="Twelve times I corrected the AI · Jovan Blanco">
+<meta property="og:description" content="Twelve real bugs and risks in AI-written code, how each was caught, and the rule that came out of it. Most of them looked correct.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%278%27 fill=%27%235B45D6%27/%3E%3Cpath d=%27M10 22l6-12 6 12M12.5 17h7%27 fill=%27none%27 stroke=%27white%27 stroke-width=%273%27 stroke-linecap=%27round%27 stroke-linejoin=%27round%27/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="bar"><div class="wrap">
+  <a class="brand" href="./">Jovan Blanco <span>· AI engineering notes</span></a>
+  <nav><a href="https://jovanmb.github.io/my-sticky-dashboard-demo/">Live demo</a><a href="https://github.com/jovanmb">GitHub</a></nav>
+</div></header>
+<main class="wrap">
+<article class="prose"><p class="kicker">Decision log</p><h1>Twelve times I corrected the AI</h1>
+<p>I built <a rel="noopener" href="https://jovanmb.github.io/my-sticky-dashboard-demo/">this dashboard</a> with Claude Code as the main author of the code, and me as the reviewer, tester and decision-maker. This log records the times the AI&#39;s output was wrong, incomplete or risky, how each was caught, and what changed as a result. Every entry is a real event from the build, first in my private version at work and then in this public rewrite.</p>
+<p>The pattern that matters: <strong>most of these bugs looked correct.</strong> The page rendered, the button responded, the tests the agent first wrote passed. They were caught by checking behaviour against reality, not by reading the code.</p>
+<hr>
+<h2>1. A silent page limit picked the wrong &quot;current ticket&quot;</h2>
+<p><strong>What the agent built:</strong> &quot;Working on now&quot; chose the most recently updated In Progress ticket from the sprint query.</p>
+<p><strong>What went wrong:</strong> the sprint grew to 151 tickets, but the query asked for one page of 100, ordered by board rank. My two most recent tickets were on page 2, so the card confidently showed an older ticket from outside the sprint. Nothing errored.</p>
+<p><strong>How it was caught:</strong> I said &quot;it still shows the wrong ticket&quot;. Instead of tweaking the selection rule, I had the agent count the sprint (151), check which page my tickets were on (page 2), and confirm the tracker&#39;s page cursor worked before relying on it.</p>
+<p><strong>Fix:</strong> my own tickets now come from a dedicated query (about 16 rows, so always complete), and the whole-sprint board follows the cursor to the end. In this repo the API&#39;s pagination is covered by tests in memory and on SQLite, and the seed deliberately has over 100 tickets so the bug can&#39;t hide.</p>
+<p><strong>Lesson:</strong> any list from an API has a page size, whether you asked for one or not. &quot;Most recent X&quot; over a truncated list is a wrong answer that looks right.</p>
+<h2>2. Multi-line Slack messages were cut to their first line</h2>
+<p><strong>What the agent built:</strong> a regular expression to pull the message text out of the Slack search result.</p>
+<p><strong>What went wrong:</strong> in multiline mode, <code>$</code> matches at every line end, and the lazy group stopped at the first one. Every multi-line message (daily-sync posts, long DMs, PR notes) showed only its opening line, &quot;Blockers:&quot;.</p>
+<p><strong>How it was caught:</strong> I noticed a daily-sync preview that couldn&#39;t possibly be one line long.</p>
+<p><strong>Fix:</strong> take everything after <code>Text:</code> up to the result&#39;s closing <code>---</code>, explicitly. There&#39;s now a regression test (<code>web/test/lib.test.mjs</code>).</p>
+<p><strong>Lesson:</strong> regex flags change what anchors mean. Test parsers on the hardest real input, not the first example.</p>
+<h2>3. A shared confirm helper left four buttons stuck</h2>
+<p><strong>What the agent built:</strong> a two-click confirm (<code>armed()</code>) for every outward action, because the sandboxed page can&#39;t use <code>confirm()</code>.</p>
+<p><strong>What went wrong:</strong> after the second click, the label stayed on &quot;Confirm…&quot; forever. That affected Jira moves, Jira comments, Slack replies and scheduling the daily sync, since all four shared the helper.</p>
+<p><strong>How it was caught:</strong> a Playwright test of the new Jira panel checked the button label after a successful move.</p>
+<p><strong>Fix:</strong> restore the original label before running the action. One fix in the shared helper corrected all four buttons.</p>
+<p><strong>Lesson:</strong> a bug in a shared helper is a bug everywhere it&#39;s used. When a test catches one, find every caller.</p>
+<h2>4. &quot;Refresh&quot; refreshed nothing</h2>
+<p><strong>What the agent built:</strong> a Refresh button that cleared the runtime&#39;s cache and showed a toast.</p>
+<p><strong>What went wrong:</strong> clearing the cache doesn&#39;t re-run anything; the next poll would, a minute later. In the real viewer the toast could also render below the visible area, so the button looked dead.</p>
+<p><strong>How it was caught:</strong> I reported &quot;refresh does nothing&quot;. A Playwright run showed the handler firing, so the bug was in what it did, not whether it ran.</p>
+<p><strong>Fix:</strong> Refresh re-runs every live query and reports on the button itself (&quot;Refreshed 10:38&quot;, or &quot;3 of 5 refreshed&quot;).</p>
+<p><strong>Lesson:</strong> &quot;it runs&quot; and &quot;it works&quot; are different checks. Feedback belongs where the user is looking.</p>
+<h2>5. The wrong signal decided what I was working on</h2>
+<p><strong>What the agent built:</strong> &quot;Working on now&quot; took the ticket from the checked-out git branch first.</p>
+<p><strong>What went wrong:</strong> my main checkout sat on an old branch while the real work happened in other worktrees, so the card was stuck on a finished ticket. When fixed to use other signals, it still happily showed tickets that were with QA or in UAT.</p>
+<p><strong>Fix:</strong> a ranked set of signals: my explicit pick, then today&#39;s daily-sync plan, then my latest In Progress ticket, then the branch. The card says which one it used, and only In Progress tickets count. A pick that moves on to QA folds into one line instead of pretending.</p>
+<p><strong>Lesson:</strong> a heuristic needs to say where its answer came from, and the user needs a way to overrule it.</p>
+<h2>6. Mentions were flooded by bots</h2>
+<p><strong>What went wrong:</strong> the Mentions search returned Jira, CI and deploy notices, because bots mention you too.</p>
+<p><strong>Fix:</strong> drop bot messages at parse time, for every chat panel. Tested.</p>
+<h2>7. A storage check hid features it didn&#39;t need to</h2>
+<p><strong>What the agent built:</strong> the page turned off its store unless an &quot;is this the owner?&quot; check said yes.</p>
+<p><strong>What went wrong:</strong> in some views that check doesn&#39;t answer, so the ticket picker and focus list disappeared for the actual owner.</p>
+<p><strong>Fix:</strong> rely on the store&#39;s own server-side rules (owner-only), which already enforce the same thing, and degrade to browser storage when the store is missing.</p>
+<p><strong>Lesson:</strong> enforce access where the data lives, not by hiding UI.</p>
+<h2>8. An API token couldn&#39;t do what the docs implied</h2>
+<p><strong>What happened:</strong> the Bitbucket token returned 403 on the &quot;who am I&quot; endpoint, then 400 when filtering pull requests by display name.</p>
+<p><strong>Fix:</strong> derive the account id from my newest merged PR in local git history (&quot;Merged in …(pull request #N)&quot;), look that PR up, and cache the id. That&#39;s in <code>laptop/prs.cjs</code>.</p>
+<p><strong>Lesson:</strong> probe permissions with read-only calls before designing around an endpoint.</p>
+<h2>9. Escaping broke edits in a way the syntax check couldn&#39;t see</h2>
+<p><strong>What happened:</strong> the agent applied some edits through inline shell scripts. A <code>\b</code> in a regex became a literal backspace character, and a <code>\d</code> lost its backslash. The file still parsed, but the regex silently matched the wrong thing.</p>
+<p><strong>How it was caught:</strong> the title-casing output looked wrong; <code>cat -A</code> showed <code>^H</code> in the source.</p>
+<p><strong>Fix:</strong> write edit scripts to files, or use exact-match edits, never inline heredocs with escapes.</p>
+<p><strong>Lesson:</strong> &quot;it parses&quot; is not &quot;it&#39;s right&quot;. Look at the bytes when output is odd.</p>
+<h2>10. Tests written to the wrong expectation</h2>
+<p><strong>What happened (this rewrite):</strong> two new tests expected bot messages to be flagged and kept. The code drops them on purpose (entry 6). The tests failed.</p>
+<p><strong>Decision:</strong> I checked which behaviour was intended before touching anything, then fixed the tests, not the code. The test now states the reason.</p>
+<p><strong>Lesson:</strong> a failing test is a disagreement between two pieces of intent. Decide which one is right; don&#39;t just make the red go away.</p>
+<h2>11. Normal behaviour shouldn&#39;t look like errors</h2>
+<p><strong>What happened (this rewrite):</strong> the page reads several optional documents on load (a pinned ticket, saved panels). Missing ones returned 404, so the browser console filled with red. Harmless, but it&#39;s the first thing a reviewer sees.</p>
+<p><strong>Fix:</strong> <code>GET /api/store/:collection?id=</code> answers <code>200 { items: [] }</code> for &quot;not there yet&quot;; the REST <code>GET /:collection/:id</code> still 404s. On GitHub Pages the page no longer probes for an API that can&#39;t exist.</p>
+<h2>12. Things I chose not to build</h2>
+<ul>
+<li><strong>A laptop task runner driven from the web page.</strong> I wanted to start Claude Code tasks from the dashboard. My organisation had disabled the official feature for that (Remote Control) by policy, and a polling runner would have quietly recreated it. I didn&#39;t build it. The page offers &quot;Let&#39;s investigate&quot; instead, which opens Claude Code locally with a prompt, so I start the work myself.</li>
+<li><strong>Customer text in links.</strong> The &quot;Let&#39;s investigate&quot; link carries only the Slack permalink, sender and channel. Message text (which can hold customer details) never goes into a URL or browser history.</li>
+<li><strong>One-click writes.</strong> Every Jira or Slack write takes two clicks, warns when the ticket isn&#39;t mine or when a move hands it to QA, and refuses to post an AI draft that still contains a <code>[check: …]</code> placeholder.</li>
+<li><strong>Retries that double-post.</strong> Comment writes carry an idempotency key. A retry after a timeout replays the first result instead of posting twice (<code>core/domain.ts</code>, tested).</li>
+</ul>
+<p class="back"><a href="./">← All notes</a></p></article>
+</main>
+<footer class="wrap foot">© 2026 Jovan Blanco. All rights reserved. Written from real work; the dashboard runs on sample data for a fictional company.</footer>
+</body>
+</html>
