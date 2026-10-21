@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en-AU">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>An AI reviewer on a design problem, judged against the codebase · Jovan Blanco</title>
+<meta name="description" content="A design problem in code that works. The reviewer agent judged it against the codebase's own rules, found all four planted issues, and caught my weak test by mutating it.">
+<meta property="og:title" content="An AI reviewer on a design problem, judged against the codebase · Jovan Blanco">
+<meta property="og:description" content="A design problem in code that works. The reviewer agent judged it against the codebase's own rules, found all four planted issues, and caught my weak test by mutating it.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%278%27 fill=%27%235B45D6%27/%3E%3Cpath d=%27M10 22l6-12 6 12M12.5 17h7%27 fill=%27none%27 stroke=%27white%27 stroke-width=%273%27 stroke-linecap=%27round%27 stroke-linejoin=%27round%27/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="bar"><div class="wrap">
+  <a class="brand" href="./">Jovan Blanco <span>· AI engineering notes</span></a>
+  <nav><a href="https://jovanmb.github.io/my-sticky-dashboard-demo/">Live demo</a><a href="https://github.com/jovanmb">GitHub</a></nav>
+</div></header>
+<main class="wrap">
+<article class="prose"><p class="kicker">Case study</p><h1>An AI reviewer on a design problem, judged against the codebase</h1>
+<p><strong>Setup.</strong> The third run, and the first through the packaged <a rel="noopener" href="https://github.com/jovanmb/claude-code-pr-review"><code>skeptical-reviewer</code></a> agent itself, installed the way a user would and run headless in Claude Code. The target was its newest ability: reviewing design against <strong>the codebase&#39;s own standards</strong>, not a textbook.</p>
+<p>The PR, &quot;LUM-1070: flag stale tickets on the board&quot;, adds one endpoint to the API behind <a rel="noopener" href="https://jovanmb.github.io/my-sticky-dashboard-demo/">my dashboard</a>. It&#39;s three files, and all 39 tests pass. The code works. What&#39;s wrong with it is design, and only a reviewer that knows this codebase would see it:</p>
+<ul>
+<li>the business rule sits in the API layer, though the domain module&#39;s header and the README both say rules live once in <code>core/</code> so the in-browser demo can use them too;</li>
+<li>it hard-codes a status list the domain already defines;</li>
+<li>it builds an interface, an abstract base class and a factory for exactly one rule;</li>
+<li>it calls <code>new Date()</code> where the domain injects a clock for testing.</li>
+</ul>
+<p>As before, I wrote down what I&#39;d planted, and what it should <em>not</em> flag, before it ran.</p>
+<h2>Result against the sealed list</h2>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>Sealed before the run</th>
+<th>What the agent did</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Rule in the wrong layer, against a documented house rule</td>
+<td>✅ Found, but <strong>graded too low</strong> (see below)</td>
+</tr>
+<tr>
+<td>Duplicated status list</td>
+<td>✅ Found, with its cost: a new status silently drifts from the board</td>
+</tr>
+<tr>
+<td>Interface + abstract base + factory for one rule</td>
+<td>✅ Found, and correctly kept as a suggestion: speculative, but no defect today</td>
+</tr>
+<tr>
+<td>Bypasses the injected clock</td>
+<td>✅ Found and proved: under a fixed clock the endpoint returns 57 tickets instead of the 34 that are stale</td>
+</tr>
+<tr>
+<td>Correct choices: input validation, reading every page</td>
+<td>✅ Not flagged. It probed 9 invalid inputs and compared every page against an independent oracle</td>
+</tr>
+<tr>
+<td><em>Not on my list</em></td>
+<td>🆕 <strong>My own test was weak.</strong> It mutation-tested it: made the endpoint read only page 1, changed the default, dropped two statuses. All four mutations still passed. I reproduced the first one myself</td>
+</tr>
+</tbody></table></div>
+<p>Its report opened with <strong>Standards applied</strong>: the README&#39;s architecture section, the domain module&#39;s header, the project&#39;s decision log, the TypeScript config, the sibling route and the sibling tests. That&#39;s the codebase awareness working: it measured the PR&#39;s test against the <em>repo&#39;s own</em> pagination tests, and quoted the decision-log entry about exactly this bug class.</p>
+<h2>What it got wrong</h2>
+<p><strong>1. It inverted the priorities.</strong> The skill says breaking a documented house rule is a graded finding. The agent decided the rule was &quot;descriptive, not a must&quot;, and let a refuter talk the layering violation down to a suggestion. That also broke the skill&#39;s rule that refuters may lower exploitability, never severity. The verdict was still ❌, but it rested on the test gap, while the architecture problem became optional. I&#39;d rank them the other way round.</p>
+<p><strong>2. It wrote refuter results before they arrived.</strong> By its own account, it drafted the refuters&#39; conclusions while they were still running, then discarded the draft when the real reports came in. It reported this itself, and the final report uses only the real results. But a reviewer that&#39;s allowed to imagine its own peer review is the failure this whole procedure exists to prevent.</p>
+<h2>What changed in the skill (v1.4)</h2>
+<ol>
+<li><strong>A descriptive rule is still a documented rule.</strong> &quot;Business rules live in <code>core</code>&quot; counts as a house standard, including README architecture sections and module header comments. It&#39;s graded on its concrete cost and never dropped to a suggestion for its phrasing; <em>must</em> only decides whether it blocks.</li>
+<li><strong>The refuter rule covers design findings too:</strong> a downgrade argument goes on the exploitability axis.</li>
+<li><strong>Never write a refuter&#39;s conclusion before its report arrives.</strong></li>
+<li><strong>Mutation-check the PR&#39;s own tests.</strong> The technique it used unprompted is now part of the procedure: break what each new test claims to cover, and if the suite still passes, the test doesn&#39;t cover it.</li>
+</ol>
+<h2>Why this matters</h2>
+<p>Design review is where AI reviewers are weakest: they either nitpick against textbook principles or wave everything through. This run shows the middle path working: it found all four planted design problems, kept the speculative abstraction as a suggestion, and grounded every point in the codebase&#39;s own files. It also shows where it still needed a human: deciding which problem matters most.</p>
+<p class="back"><a href="./">← All notes</a></p></article>
+</main>
+<footer class="wrap foot">© 2026 Jovan Blanco. All rights reserved. Written from real work; the dashboard runs on sample data for a fictional company.</footer>
+</body>
+</html>
